@@ -66,7 +66,7 @@ class ConfigException : Exception
      *      line = The line
      */
 
-    this ( string msg, string file = __FILE__, uint line = __LINE__ )
+    this ( string msg, string file = __FILE__, size_t line = __LINE__ )
     {
         super(msg, file, line);
     }
@@ -233,6 +233,7 @@ struct ConfigParser ( Config )
         import std.exception;
         import std.format;
         import std.string;
+        import std.algorithm : find;
         import std.traits;
 
         // Field name tuple of the struct to parse
@@ -250,18 +251,27 @@ struct ConfigParser ( Config )
         // Parse the lines as key value pairs of the "key = value" format
         foreach ( line; lines )
         {
-            auto kv = line.split('=');
-
             // Enforce that the line contains one '='
-            enforce!ConfigException(kv.length == 2, format("[%s] Fields must be \"key = value\" pairs", category));
-
-            auto key = kv[0].strip();
-            auto val = kv[1].strip();
+            auto eq = line.indexOf('=');
+            enforce!ConfigException(eq > 0, format("[%s] Fields must be \"key = value\" pairs", category));
+            
+            auto key = line[0..eq].strip();
+            auto val = line.find('=');
+            val = val[1..$].strip();
 
             // Enforce that the entry has both a key and a value
-            enforce!ConfigException(key.length > 0 && val.length > 0, format("[%s] Fields must be \"key = value\" pairs", category));
+            enforce!ConfigException(key.length > 0, format("[%s] Fields must be \"key = value\" pairs", category));
 
-            field_map[key.toLower()] = val;
+            if (val.length > 0 && val[0] == '"') {
+                enforce(val[$-1] == '"', "[%s] Fields must be \"key = value\" pairs".format(category));
+                if (val.length > 2) {
+                    field_map[key.toLower()] = val[1..$-1];
+                } else {
+                    field_map[key.toLower()] = null;
+                }
+            } else {
+                field_map[key.toLower()] = val;
+            }
         }
 
         // Build the result struct based on the associative array
